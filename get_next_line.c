@@ -12,91 +12,109 @@
 
 #include "get_next_line.h"
 
-char	*get_next_line(int fd)
+int	read_from_fd(int fd, char **full_buffer)
 {
-	static char	*full_buffer;
-	char		*temp_buffer;
-	char		buffer[BUFFER_SIZE + 1];
-	char		*newline;
-	char		*line;
-	char		*remaining;
-	size_t		index;
-	size_t		line_len;
-	size_t		leftover_len;
-	size_t		remaining_index;
-	ssize_t		bytes_read;
+	char	buffer[BUFFER_SIZE + 1];
+	char	*temp_buffer;
+	ssize_t	bytes_read;
 
-	if (fd < 0 || BUFFER_SIZE <= 0)
-    	return (NULL);
-	if (full_buffer == NULL)
-	{
-		full_buffer = malloc(1);
-    	if (!full_buffer)
-        	return (NULL);
-    	full_buffer[0] = '\0';
-	}
-	while (!ft_strchr(full_buffer, '\n'))
+	while (!ft_strchr(*full_buffer, '\n'))
 	{
 		bytes_read = read(fd, buffer, BUFFER_SIZE);
 		if (bytes_read == -1)
 		{
-			free(full_buffer);
-			full_buffer = NULL;
-			return (NULL);
+			free(*full_buffer);
+			*full_buffer = NULL;
+			return (-1);
 		}
 		if (bytes_read == 0)
-			break;
+			break ;
 		buffer[bytes_read] = '\0';
-		temp_buffer = ft_strjoin(full_buffer , buffer);
+		temp_buffer = ft_strjoin(*full_buffer, buffer);
 		if (!temp_buffer)
-			return (NULL);
-		free(full_buffer);
-		full_buffer = temp_buffer;
+			return (-1);
+		free(*full_buffer);
+		*full_buffer = temp_buffer;
 	}
-	if (full_buffer[0] == '\0')
-	{
-		free(full_buffer);
-		full_buffer = NULL;
-		return (NULL);
-	}
-	newline = ft_strchr(full_buffer, '\n');
-	if (newline)
-		line_len = newline - full_buffer + 1;
-	else
-		line_len = ft_strlen(full_buffer);
-	line = malloc(line_len + 1);
-	if (!line)
-		return (NULL);
-	index = 0;
-	while (full_buffer[index] && index < line_len)
-	{
-		line[index] = full_buffer[index];
-		index++;
-	}
-	line[index] = '\0';
+	return (0);
+}
+
+char	*extract_line(char *full_buffer)
+{
+	size_t	line_len;
+
+	line_len = 0;
+	while (full_buffer[line_len] && full_buffer[line_len] != '\n')
+		line_len++;
+	if (full_buffer[line_len] == '\n')
+		line_len++;
+	return (ft_substr(full_buffer, 0, line_len));
+}
+
+int	update_buffer(char **full_buffer)
+{
+	size_t	leftover_len;
+	size_t	remaining_index;
+	char	*remaining;
+
 	leftover_len = 0;
-	while (full_buffer[index])
+	while ((*full_buffer)[leftover_len]
+		&& (*full_buffer)[leftover_len] != '\n')
+		leftover_len++;
+	if ((*full_buffer)[leftover_len] == '\n')
+		leftover_len++;
+	remaining = malloc(ft_strlen(*full_buffer) - leftover_len + 1);
+	if (!remaining)
+		return (-1);
+	remaining_index = 0;
+	while ((*full_buffer)[leftover_len])
 	{
-		index++;
+		remaining[remaining_index] = (*full_buffer)[leftover_len];
+		remaining_index++;
 		leftover_len++;
 	}
-	remaining = malloc(leftover_len + 1);
-	if (!remaining)
+	remaining[remaining_index] = '\0';
+	free(*full_buffer);
+	*full_buffer = remaining;
+	return (1);
+}
+
+int	prepare_buffer(int fd, char **full_buffer)
+{
+	if (*full_buffer == NULL)
+	{
+		*full_buffer = malloc(1);
+		if (!*full_buffer)
+			return (-1);
+		(*full_buffer)[0] = '\0';
+	}
+	if (read_from_fd(fd, full_buffer) == -1)
+		return (-1);
+	if ((*full_buffer)[0] == '\0')
+	{
+		free(*full_buffer);
+		*full_buffer = NULL;
+		return (0);
+	}
+	return (1);
+}
+
+char	*get_next_line(int fd)
+{
+	static char	*full_buffer;
+	char		*line;
+
+	if (fd < 0 || BUFFER_SIZE <= 0)
+		return (NULL);
+	if (prepare_buffer(fd, &full_buffer) != 1)
+		return (NULL);
+	line = extract_line(full_buffer);
+	if (!line)
+		return (NULL);
+	if (update_buffer(&full_buffer) == -1)
 	{
 		free(line);
 		return (NULL);
 	}
-	
-	index = index - leftover_len;
-	remaining_index = 0;
-	while (full_buffer[index])
-	{
-		remaining[remaining_index] = full_buffer[index];
-		remaining_index++;
-		index++;
-	}
-	remaining[remaining_index] = '\0';
-	free(full_buffer);
-	full_buffer = remaining;
-	return(line);
+	return (line);
 }
